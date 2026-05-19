@@ -1,4 +1,4 @@
-package demos
+package demos.android.kotlin.hello.world.demo
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
