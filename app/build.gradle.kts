@@ -1,22 +1,26 @@
 plugins {
     id("com.android.application")
-    kotlin("android")
 }
 
 android {
-    compileSdk = 31
+    namespace = "demos.android.kotlin.hello.world.demo"
+    compileSdk = 36
+
     defaultConfig {
         applicationId = "demos.android.kotlin.hello.world.demo"
-        minSdk = 15
-        targetSdk = 28
+        minSdk = 24
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
 dependencies {
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.6.10")
-    implementation("androidx.appcompat:appcompat:1.4.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.2")
+    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
 }
