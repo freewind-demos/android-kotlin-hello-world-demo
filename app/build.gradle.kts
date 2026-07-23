@@ -6,6 +6,15 @@ android {
     namespace = "demos.android.kotlin.hello.world.demo"
     compileSdk = 36
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "demos.android.kotlin.hello.world.demo"
         minSdk = 24
