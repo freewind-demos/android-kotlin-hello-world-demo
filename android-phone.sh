@@ -32,7 +32,7 @@ if [[ "${#apks[@]}" -eq 0 ]]; then
 fi
 
 if [[ "${#apks[@]}" -ne 1 ]]; then
-  echo "Expected exactly one APK under $APK_SOURCE_DIR, got ${#apks[@]}:" >&2
+  echo "Expected exactly one APK under $APK_SOURCE_DIR, got ${#apks[@]}" >&2
   printf '%s\n' "${apks[@]}" >&2
   exit 1
 fi
