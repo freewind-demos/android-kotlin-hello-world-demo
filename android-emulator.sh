@@ -8,48 +8,96 @@ AVD_NAME="Pixel_7_API_35"
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 ADB="$ANDROID_HOME/platform-tools/adb"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
-APK_ROOT="$PWD/$MODULE_DIR/build/outputs/apk"
+APK_DIRS=("$PWD/dist/android" "$PWD/$MODULE_DIR/build/outputs/apk")
+APK_SOURCE_DIR=""
 
-shopt -s globstar nullglob
-apks=("$APK_ROOT"/**/*.apk)
-shopt -u globstar nullglob
+apks=()
+for apk_dir in "${APK_DIRS[@]}"; do
+  current_apks=()
+  if [[ -d "$apk_dir" ]]; then
+    while IFS= read -r apk_path; do
+      current_apks+=("$apk_path")
+    done < <(/usr/bin/find "$apk_dir" -type f -name '*.apk' | sort)
+  fi
+  if [[ "${#current_apks[@]}" -gt 0 ]]; then
+    apks=("${current_apks[@]}")
+    APK_SOURCE_DIR="$apk_dir"
+    break
+  fi
+done
 
 if [[ "${#apks[@]}" -eq 0 ]]; then
-  echo "APK not found under: $APK_ROOT" >&2
+  echo "APK not found under:" >&2
+  printf '  %s\n' "${APK_DIRS[@]}" >&2
   echo "Run ./android-build.sh first" >&2
   exit 1
 fi
 
 if [[ "${#apks[@]}" -ne 1 ]]; then
-  echo "Expected exactly one APK under $APK_ROOT, got ${#apks[@]}:" >&2
+  echo "Expected exactly one APK under $APK_SOURCE_DIR, got ${#apks[@]}:" >&2
   printf '%s\n' "${apks[@]}" >&2
   exit 1
 fi
 
 APK_PATH="${apks[0]}"
 
-find_emulator() {
+find_online_emulator() {
   "$ADB" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }'
 }
 
-SERIAL="$(find_emulator)"
+find_any_emulator() {
+  "$ADB" devices | awk '$1 ~ /^emulator-/ { print $1; exit }'
+}
+
+wait_for_online_emulator() {
+  for _ in $(seq 1 360); do
+    SERIAL="$(find_online_emulator)"
+    [[ -n "$SERIAL" ]] && return 0
+
+    OFFLINE_SERIAL="$(find_any_emulator)"
+    if [[ -n "$OFFLINE_SERIAL" ]]; then
+      "$ADB" reconnect offline >/dev/null 2>&1 || true
+    fi
+
+    sleep 2
+  done
+
+  return 1
+}
+
+wait_for_package_service() {
+  for _ in $(seq 1 360); do
+    STATE="$("$ADB" -s "$SERIAL" get-state 2>/dev/null || true)"
+    if [[ "$STATE" == "device" ]]; then
+      BOOTED="$("$ADB" -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+      PACKAGE_READY="$("$ADB" -s "$SERIAL" shell cmd package path android 2>/dev/null | tr -d '\r' || true)"
+      if [[ "$BOOTED" == "1" && "$PACKAGE_READY" == package:* ]]; then
+        return 0
+      fi
+    else
+      "$ADB" reconnect offline >/dev/null 2>&1 || true
+    fi
+
+    sleep 2
+  done
+
+  return 1
+}
+
+SERIAL="$(find_online_emulator)"
 
 if [[ -z "$SERIAL" ]]; then
   CPU_BRAND="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
   HV_SUPPORT="$(sysctl -n kern.hv_support 2>/dev/null || echo 0)"
-  EMULATOR_ARGS=(-avd "$AVD_NAME" -no-snapshot -netdelay none -netspeed full)
+  EMULATOR_ARGS=(-avd "$AVD_NAME" -no-snapshot-load -netdelay none -netspeed full)
 
   if [[ "$HV_SUPPORT" != "1" || "$CPU_BRAND" == *AMD* ]]; then
-    EMULATOR_ARGS+=(-no-accel -gpu swiftshader_indirect -no-audio)
+    EMULATOR_ARGS+=(-accel off -gpu swiftshader_indirect -no-audio)
   fi
 
   "$EMULATOR" "${EMULATOR_ARGS[@]}" >/tmp/android-emulator-"$PROJECT_NAME".log 2>&1 &
 
-  for _ in $(seq 1 120); do
-    SERIAL="$(find_emulator)"
-    [[ -n "$SERIAL" ]] && break
-    sleep 2
-  done
+  wait_for_online_emulator || true
 fi
 
 if [[ -z "$SERIAL" ]]; then
@@ -59,18 +107,9 @@ fi
 
 "$ADB" -s "$SERIAL" wait-for-device
 
-BOOTED_OK=0
-for _ in $(seq 1 120); do
-  BOOTED="$("$ADB" -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
-  if [[ "$BOOTED" == "1" ]]; then
-    BOOTED_OK=1
-    break
-  fi
-  sleep 2
-done
-
-if [[ "$BOOTED_OK" != "1" ]]; then
-  echo "Emulator boot timeout: $SERIAL" >&2
+if ! wait_for_package_service; then
+  echo "Emulator package service timeout: $SERIAL" >&2
+  echo "Emulator log: /tmp/android-emulator-$PROJECT_NAME.log" >&2
   exit 1
 fi
 
