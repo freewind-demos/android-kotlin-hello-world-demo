@@ -37,7 +37,8 @@ if [[ "${#apks[@]}" -ne 1 ]]; then
 fi
 
 APK_PATH="${apks[0]}"
-TARGET_APK_PATH="$APK_DIR/$PROJECT_NAME-$BUILD_TYPE.apk"
+BUILD_TIME="$(date +%H%M)"
+TARGET_APK_PATH="$APK_DIR/$PROJECT_NAME-$BUILD_TYPE.$BUILD_TIME.apk"
 
 if [[ "$APK_PATH" != "$TARGET_APK_PATH" ]]; then
   mv -f "$APK_PATH" "$TARGET_APK_PATH"
